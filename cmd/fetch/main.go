@@ -57,6 +57,10 @@ func buildItem(values []string) (it *item, err error) {
 	if err != nil {
 		return
 	}
+	img, err := downloadImage(values[2])
+	if err != nil {
+		return
+	}
 	it = &item{
 		netflixID: netflixID,
 		imdbID:    values[11],
@@ -67,17 +71,14 @@ func buildItem(values []string) (it *item, err error) {
 		apiDate:   apiDate,
 		duration:  values[8],
 		imageUrl:  values[2],
+		image:     img,
 	}
 	return
 }
 
 func insert(db *sql.DB, it *item) (err error) {
-	bs, err := downloadImage(it.imageUrl)
-	if err != nil {
-		return
-	}
 	fmt.Println(it.title)
-	_, err = db.Exec("insert into item (netflix_id, imdb_id, title, summary, item_type, year, api_date, duration, image_url, image) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", it.netflixID, it.imdbID, it.title, it.summary, it.itemType, it.year, it.apiDate, it.duration, it.imageUrl, bs)
+	_, err = db.Exec("insert into item (netflix_id, imdb_id, title, summary, item_type, year, api_date, duration, image_url, image) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", it.netflixID, it.imdbID, it.title, it.summary, it.itemType, it.year, it.apiDate, it.duration, it.imageUrl, it.image)
 	return
 }
 
