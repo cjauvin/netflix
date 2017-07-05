@@ -6,18 +6,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 const (
-	daysBack = 20
-	country  = "CA"
+	daysBack                 = 20
+	country                  = "CA"
+	uniqueViolationErrorCode = "23505"
 )
+
+type netflixDB struct {
+	*sql.DB
+}
 
 type apiResponse struct {
 	Count string     `json:"COUNT"`
@@ -76,7 +82,7 @@ func buildItem(values []string) (it *item, err error) {
 	return
 }
 
-func insert(db *sql.DB, it *item) (err error) {
+func (db *netflixDB) insert(it *item) (err error) {
 	fmt.Println(it.title)
 	_, err = db.Exec("insert into item (netflix_id, imdb_id, title, summary, item_type, year, api_date, duration, image_url, image) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", it.netflixID, it.imdbID, it.title, it.summary, it.itemType, it.year, it.apiDate, it.duration, it.imageUrl, it.image)
 	return
@@ -92,8 +98,13 @@ func downloadImage(url string) (img []byte, err error) {
 	return
 }
 
-func main() {
+func getNetflixDB() (netflixDB, error) {
 	db, err := sql.Open("postgres", "host=/var/run/postgresql dbname=netflix sslmode=disable")
+	return netflixDB{db}, err
+}
+
+func main() {
+	db, err := getNetflixDB()
 	check(err)
 	defer db.Close()
 	k, err := ioutil.ReadFile("mashape_key.txt")
@@ -120,16 +131,30 @@ func main() {
 		check(err)
 		defer resp.Body.Close()
 
+		body, err := ioutil.ReadAll(resp.Body)
+		check(err)
+
 		apiResp := apiResponse{}
 
-		err = json.NewDecoder(resp.Body).Decode(&apiResp)
-		check(err)
+		//err = json.NewDecoder(resp.Body).Decode(&apiResp)
+		err = json.Unmarshal(body, &apiResp)
+		if err != nil {
+			log.Fatalf("Got this response: %v", string(body))
+		}
 
 		for _, values := range apiResp.Items {
 			it, err := buildItem(values)
 			check(err)
-			err = insert(db, it)
-			check(err)
+			err = db.insert(it)
+			if err != nil {
+				if err, ok := err.(*pq.Error); ok {
+					if err.Code == uniqueViolationErrorCode {
+						fmt.Println("already there")
+						continue
+					}
+				}
+				check(err)
+			}
 		}
 
 		done = true
