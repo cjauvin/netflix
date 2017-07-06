@@ -2,15 +2,15 @@ package main
 
 import (
 	"crypto/tls"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
+
+	nfdb "github.com/cjauvin/netflix/db"
 
 	"github.com/lib/pq"
 )
@@ -18,30 +18,12 @@ import (
 const (
 	daysBack                 = 20
 	country                  = "CA"
-	uniqueViolationErrorCode = "23505"
+	uniqueViolationErrorCode = "23505" // https://www.postgresql.org/docs/current/static/errcodes-appendix.html
 )
-
-type netflixDB struct {
-	*sql.DB
-}
 
 type apiResponse struct {
 	Count string     `json:"COUNT"`
 	Items [][]string `json:"ITEMS"`
-}
-
-type item struct {
-	//itemID    int
-	netflixID int
-	imdbID    string
-	title     string
-	summary   string
-	itemType  string
-	year      int
-	apiDate   time.Time
-	duration  string
-	imageUrl  string
-	image     []byte
 }
 
 func check(e error) {
@@ -50,61 +32,8 @@ func check(e error) {
 	}
 }
 
-func buildItem(values []string) (it *item, err error) {
-	netflixID, err := strconv.Atoi(values[0])
-	if err != nil {
-		return
-	}
-	year, err := strconv.Atoi(values[7])
-	if err != nil {
-		return
-	}
-	apiDate, err := time.Parse("2006-01-02", values[10])
-	if err != nil {
-		return
-	}
-	img, err := downloadImage(values[2])
-	if err != nil {
-		return
-	}
-	it = &item{
-		netflixID: netflixID,
-		imdbID:    values[11],
-		title:     values[1],
-		summary:   values[3],
-		itemType:  values[6],
-		year:      year,
-		apiDate:   apiDate,
-		duration:  values[8],
-		imageUrl:  values[2],
-		image:     img,
-	}
-	return
-}
-
-func (db *netflixDB) insert(it *item) (err error) {
-	fmt.Println(it.title)
-	_, err = db.Exec("insert into item (netflix_id, imdb_id, title, summary, item_type, year, api_date, duration, image_url, image) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", it.netflixID, it.imdbID, it.title, it.summary, it.itemType, it.year, it.apiDate, it.duration, it.imageUrl, it.image)
-	return
-}
-
-func downloadImage(url string) (img []byte, err error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-	img, err = ioutil.ReadAll(resp.Body)
-	return
-}
-
-func getNetflixDB() (netflixDB, error) {
-	db, err := sql.Open("postgres", "host=/var/run/postgresql dbname=netflix sslmode=disable")
-	return netflixDB{db}, err
-}
-
 func main() {
-	db, err := getNetflixDB()
+	db, err := nfdb.GetNetflixDB()
 	check(err)
 	defer db.Close()
 	k, err := ioutil.ReadFile("mashape_key.txt")
@@ -143,9 +72,9 @@ func main() {
 		}
 
 		for _, values := range apiResp.Items {
-			it, err := buildItem(values)
+			it, err := nfdb.BuildItem(values)
 			check(err)
-			err = db.insert(it)
+			err = db.InsertItem(it)
 			if err != nil {
 				if err, ok := err.(*pq.Error); ok {
 					if err.Code == uniqueViolationErrorCode {
