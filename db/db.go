@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	_ "github.com/lib/pq"
 )
 
 type NetflixDB struct {
@@ -14,6 +16,7 @@ type NetflixDB struct {
 }
 
 type Item struct {
+	ItemID    int
 	NetflixID int
 	ImdbID    string
 	Title     string
@@ -76,5 +79,21 @@ func GetNetflixDB() (NetflixDB, error) {
 func (db *NetflixDB) InsertItem(it *Item) (err error) {
 	fmt.Println(it.Title)
 	_, err = db.Exec("insert into item (netflix_id, imdb_id, Title, Summary, item_type, Year, api_date, Duration, image_url, Image) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", it.NetflixID, it.ImdbID, it.Title, it.Summary, it.ItemType, it.Year, it.ApiDate, it.Duration, it.ImageUrl, it.Image)
+	return
+}
+
+func (db *NetflixDB) GetItems() (items []*Item, err error) {
+	rows, err := db.Query("select * from item limit 40")
+	defer rows.Close()
+	if err == nil {
+		for rows.Next() {
+			it := Item{}
+			err := rows.Scan(&it.ItemID, &it.NetflixID, &it.ImdbID, &it.Title, &it.Summary, &it.ItemType, &it.Year, &it.ApiDate, &it.Duration, &it.ImageUrl, &it.Image)
+			if err != nil {
+				panic(err)
+			}
+			items = append(items, &it)
+		}
+	}
 	return
 }

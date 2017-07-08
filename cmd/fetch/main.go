@@ -3,11 +3,11 @@ package main
 import (
 	"crypto/tls"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
-	"strings"
 	"time"
 
 	nfdb "github.com/cjauvin/netflix/db"
@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	daysBack                 = 20
+	daysBack                 = 7
 	country                  = "CA"
 	uniqueViolationErrorCode = "23505" // https://www.postgresql.org/docs/current/static/errcodes-appendix.html
 )
@@ -33,20 +33,24 @@ func check(e error) {
 }
 
 func main() {
+
+	key := flag.String("key", "", "Mashape API key")
+	flag.Parse()
+	if *key == "" {
+		log.Fatalf("key must be provided")
+	}
+
 	db, err := nfdb.GetNetflixDB()
 	check(err)
 	defer db.Close()
-	k, err := ioutil.ReadFile("mashape_key.txt")
-	check(err)
-	key := strings.TrimSpace(string(k))
 
 	done := false
 	for page := 1; !done; page++ {
-		//u := fmt.Sprintf("https://unogs-unogs-v1.p.mashape.com/api.cgi?q=get:new%d:%s&p=%d&t=ns&st=adv", daysBack, country, page)
-		u := "http://localhost:8001/sample.json"
+		u := fmt.Sprintf("https://unogs-unogs-v1.p.mashape.com/api.cgi?q=get:new%d:%s&p=%d&t=ns&st=adv", daysBack, country, page)
+		//u := "http://localhost:8001/sample.json"
 		req, err := http.NewRequest("GET", u, nil)
 		check(err)
-		req.Header.Set("X-Mashape-Key", key)
+		req.Header.Set("X-Mashape-Key", *key)
 		req.Header.Set("Accept", "application/json")
 
 		client := http.Client{
@@ -86,7 +90,7 @@ func main() {
 			}
 		}
 
-		done = true
+		done = len(apiResp.Items) == 0
 	}
 
 }
