@@ -13,9 +13,9 @@ create table item (
   image bytea
 );
 
-drop table if exists user;
-create table user (
-  user_id serial primary key,
-  email text,
-  is_active bool
+drop table if exists user_account;
+create table user_account (
+  user_account_id serial primary key,
+  email text unique,
+  is_active bool default true
 );

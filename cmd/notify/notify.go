@@ -49,14 +49,13 @@ func main() {
 	defer db.Close()
 
 	tmpl := template.Must(template.New("example").Parse(`
-	<table>
-	{{range .}}
-	  <tr>
-	    {{range .}}<td><img src={{.ImageUrl}}><img><br>{{.Title}}<hr>{{.Summary}}</td>{{end}}
-	  </tr>
-	{{end}}
-	</table>
-	`))
+<table>
+  {{range .}}
+    <tr>
+      {{range .}}<td><img src={{.ImageUrl}}><img><br>{{.Title}}<hr>{{.Summary}}</td>{{end}}
+    </tr>
+  {{end}}
+</table>`))
 
 	g := []row{}
 

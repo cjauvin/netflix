@@ -82,6 +82,11 @@ func (db *NetflixDB) InsertItem(it *Item) (err error) {
 	return
 }
 
+func (db *NetflixDB) UpsertUser(email string, isActive bool) (err error) {
+	_, err = db.Exec("insert into user_account (email, is_active) values ($1, $2) on conflict (email) do update set is_active = $2", email, isActive)
+	return
+}
+
 func (db *NetflixDB) GetItems() (items []*Item, err error) {
 	rows, err := db.Query("select * from item limit 40")
 	defer rows.Close()
