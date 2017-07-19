@@ -32,7 +32,21 @@ func BuildEmailBody(items []*Item) string {
 <table>
   {{range .}}
     <tr>
-      {{range .}}<td><img src={{.ImageUrl}}><img><br><i>{{.Title}}</i><hr>{{.Summary}}<br><a href="http://imdb.com/title/{{.ImdbID}}">IMDb</a><br><a href="https://netflix.com/title/{{.NetflixID}}">Netflix</a></td>{{end}}
+      {{range .}}
+      <td>
+        {{if .ItemID }}
+	  <img src={{.ImageUrl}}><img>
+	  <br />
+	  <i>{{.Title}}</i>
+	  <hr />
+	  {{.Summary}}
+          <br />
+	  <a href="http://imdb.com/title/{{.ImdbID}}">IMDb</a>
+	  <br />
+	  <a href="https://netflix.com/title/{{.NetflixID}}">Netflix</a>
+        {{end}}
+      </td>
+      {{end}}
     </tr>
   {{end}}
 </table>`))

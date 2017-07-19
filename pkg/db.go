@@ -9,6 +9,10 @@ import (
 	_ "github.com/lib/pq"
 )
 
+const (
+	limitForFullQuery = 50
+)
+
 type NetflixDB struct {
 	*sql.DB
 }
@@ -96,9 +100,9 @@ func (db *NetflixDB) GetItems(minItemID sql.NullInt64) (items []*Item, err error
 	} else {
 		rows, err = db.Query(`
 		    with t as (
-			select * from item order by item_id desc limit 50
+			select * from item order by item_id desc limit $1
 		    )
-		    select * from t order by item_id`)
+		    select * from t order by item_id`, limitForFullQuery)
 	}
 	defer rows.Close()
 	if err == nil {
