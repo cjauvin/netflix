@@ -9,15 +9,16 @@ import (
 
 	_ "github.com/wader/disable_sendfile_vbox_linux"
 
-	nfdb "github.com/cjauvin/netflix/db"
+	lib "github.com/cjauvin/netflix/pkg"
 )
 
 var (
-	pw   = flag.String("pw", "", "POST password")
-	port = flag.Int("port", 80, "port")
+	webPassword  = flag.String("web-pw", "", "POST password")
+	SMTPPassword = flag.String("smtp-pw", "", "SMTP password")
+	port         = flag.Int("port", 80, "port")
 )
 
-func post(db nfdb.NetflixDB) http.Handler {
+func post(db lib.NetflixDB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.ParseForm()
 		if r.Method != "POST" {
@@ -36,7 +37,7 @@ func post(db nfdb.NetflixDB) http.Handler {
 			return
 		}
 
-		if r.Form["password"][0] != *pw {
+		if r.Form["password"][0] != *webPassword {
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte("Unauthorized!"))
 			return
@@ -52,13 +53,23 @@ func post(db nfdb.NetflixDB) http.Handler {
 			return
 		}
 
-		err := db.UpsertUser(email, isSubscribing)
-		if err != nil {
-			panic(err)
-		}
+		u, err := db.UpsertUser(email, isSubscribing)
+		lib.Check(err)
 
 		if isSubscribing {
-			fmt.Fprintf(w, "%s has been subscribed", email)
+			items, err := db.GetItems(u.LastSentItemID)
+			lib.Check(err)
+			if len(items) > 0 {
+				body := lib.BuildEmailBody(items)
+				err = lib.SendEmail("cjauvin@gmail.com", u.Email, "Netflix Updates", body, *SMTPPassword)
+				lib.Check(err)
+				lastSentItemID := items[len(items)-1].ItemID
+				db.UpdateUserLastSentItemID(u.UserAccountID, lastSentItemID)
+				log.Printf("Sent %d items to %s", len(items), u.Email)
+				fmt.Fprintf(w, "%s has been subscribed (a first email has been sent)", email)
+			} else {
+				fmt.Fprintf(w, "%s has been subscribed", email)
+			}
 		} else {
 			fmt.Fprintf(w, "%s has been unsubscribed", email)
 		}
@@ -67,15 +78,16 @@ func post(db nfdb.NetflixDB) http.Handler {
 
 func main() {
 
-	db, err := nfdb.GetNetflixDB()
-	if err != nil {
-		panic(err)
-	}
+	db, err := lib.GetNetflixDB()
+	lib.Check(err)
 	defer db.Close()
 
 	flag.Parse()
-	if *pw == "" {
+	if *webPassword == "" {
 		log.Fatalf("POST password must be provided")
+	}
+	if *SMTPPassword == "" {
+		log.Fatalf("SMTP password must be provided")
 	}
 
 	http.Handle("/", http.FileServer(http.Dir("static")))

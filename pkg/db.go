@@ -1,10 +1,8 @@
-package db
+package lib
 
 import (
 	"database/sql"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"strconv"
 	"time"
 
@@ -34,16 +32,6 @@ type User struct {
 	Email          string
 	IsActive       bool
 	LastSentItemID sql.NullInt64
-}
-
-func downloadImage(url string) (img []byte, err error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-	img, err = ioutil.ReadAll(resp.Body)
-	return
 }
 
 func BuildItem(values []string) (it *Item, err error) {
@@ -89,9 +77,11 @@ func (db *NetflixDB) InsertItem(it *Item) (err error) {
 	return
 }
 
-func (db *NetflixDB) UpsertUser(email string, isActive bool) (err error) {
-	_, err = db.Exec("insert into user_account (email, is_active) values ($1, $2) on conflict (email) do update set is_active = $2", email, isActive)
-	return
+func (db *NetflixDB) UpsertUser(email string, isActive bool) (*User, error) {
+	row := db.QueryRow("insert into user_account (email, is_active) values ($1, $2) on conflict (email) do update set is_active = $2 returning *", email, isActive)
+	u := User{}
+	err := row.Scan(&u.UserAccountID, &u.Email, &u.IsActive, &u.LastSentItemID)
+	return &u, err
 }
 
 func (db *NetflixDB) UpdateUserLastSentItemID(userAccountID int, lastSentItemID int) (err error) {
@@ -104,7 +94,11 @@ func (db *NetflixDB) GetItems(minItemID sql.NullInt64) (items []*Item, err error
 	if minItemID.Valid {
 		rows, err = db.Query("select * from item where item_id > $1 order by item_id", minItemID.Int64)
 	} else {
-		rows, err = db.Query("select * from item order by item_id")
+		rows, err = db.Query(`
+		    with t as (
+			select * from item order by item_id desc limit 50
+		    )
+		    select * from t order by item_id`)
 	}
 	defer rows.Close()
 	if err == nil {

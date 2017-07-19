@@ -1,40 +1,11 @@
 package main
 
 import (
-	"bytes"
 	"flag"
-	"fmt"
 	"log"
-	"net/smtp"
-	"text/template"
 
-	nfdb "github.com/cjauvin/netflix/db"
+	lib "github.com/cjauvin/netflix/pkg"
 )
-
-const (
-	nCols = 5
-)
-
-type row [nCols]nfdb.Item
-
-func check(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
-
-func sendEmail(from string, to string, subject string, body string, pw string) (err error) {
-
-	mime := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
-	fr := fmt.Sprintf("From: %s\n", from)
-	t := fmt.Sprintf("To: %s\n", to)
-	sub := fmt.Sprintf("Subject: %s\n", subject)
-	msg := []byte(fr + t + sub + mime + body)
-
-	auth := smtp.PlainAuth("", from, pw, "smtp.gmail.com")
-	err = smtp.SendMail("smtp.gmail.com:587", auth, from, []string{to}, msg)
-	return
-}
 
 func main() {
 
@@ -44,49 +15,27 @@ func main() {
 		log.Fatalf("pw must be provided")
 	}
 
-	db, err := nfdb.GetNetflixDB()
-	check(err)
+	db, err := lib.GetNetflixDB()
+	lib.Check(err)
 	defer db.Close()
 
-	tmpl := template.Must(template.New("example").Parse(`
-<table>
-  {{range .}}
-    <tr>
-      {{range .}}<td><img src={{.ImageUrl}}><img><br><i>{{.Title}}</i><hr>{{.Summary}}<br><a href="http://imdb.com/title/{{.ImdbID}}">IMDb</a><br><a href="https://netflix.com/title/{{.NetflixID}}">Netflix</a></td>{{end}}
-    </tr>
-  {{end}}
-</table>`))
-
 	users, err := db.GetUsers()
-	check(err)
+	lib.Check(err)
 
 	for _, u := range users {
+
 		items, err := db.GetItems(u.LastSentItemID)
-		check(err)
+		lib.Check(err)
 
 		if len(items) == 0 {
 			log.Printf("No items for %s, skipping", u.Email)
 			continue
 		}
 
-		g := []row{}
+		body := lib.BuildEmailBody(items)
 
-		var j int
-		for i, it := range items {
-			if i%nCols == 0 {
-				j = 0
-				g = append(g, row{})
-			}
-			g[len(g)-1][j] = *it
-			j++
-		}
-
-		var tpl bytes.Buffer
-		err = tmpl.Execute(&tpl, g)
-		check(err)
-
-		err = sendEmail("cjauvin@gmail.com", u.Email, "Netflix Updates", tpl.String(), *pw)
-		check(err)
+		err = lib.SendEmail("cjauvin@gmail.com", u.Email, "Netflix Updates", body, *pw)
+		lib.Check(err)
 
 		lastSentItemID := items[len(items)-1].ItemID
 		db.UpdateUserLastSentItemID(u.UserAccountID, lastSentItemID)

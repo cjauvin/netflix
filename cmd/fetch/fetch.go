@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	nfdb "github.com/cjauvin/netflix/db"
+	lib "github.com/cjauvin/netflix/pkg"
 
 	"github.com/lib/pq"
 )
@@ -26,12 +26,6 @@ type apiResponse struct {
 	Items [][]string `json:"ITEMS"`
 }
 
-func check(e error) {
-	if e != nil {
-		panic(e)
-	}
-}
-
 func main() {
 
 	key := flag.String("key", "", "Mashape API key")
@@ -40,8 +34,8 @@ func main() {
 		log.Fatalf("key must be provided")
 	}
 
-	db, err := nfdb.GetNetflixDB()
-	check(err)
+	db, err := lib.GetNetflixDB()
+	lib.Check(err)
 	defer db.Close()
 
 	done := false
@@ -49,7 +43,7 @@ func main() {
 		u := fmt.Sprintf("https://unogs-unogs-v1.p.mashape.com/api.cgi?q=get:new%d:%s&p=%d&t=ns&st=adv", daysBack, country, page)
 		//u := "http://localhost:8001/sample.json"
 		req, err := http.NewRequest("GET", u, nil)
-		check(err)
+		lib.Check(err)
 		req.Header.Set("X-Mashape-Key", *key)
 		req.Header.Set("Accept", "application/json")
 
@@ -61,11 +55,11 @@ func main() {
 		}
 
 		resp, err := client.Do(req)
-		check(err)
+		lib.Check(err)
 		defer resp.Body.Close()
 
 		body, err := ioutil.ReadAll(resp.Body)
-		check(err)
+		lib.Check(err)
 
 		apiResp := apiResponse{}
 
@@ -76,8 +70,8 @@ func main() {
 		}
 
 		for _, values := range apiResp.Items {
-			it, err := nfdb.BuildItem(values)
-			check(err)
+			it, err := lib.BuildItem(values)
+			lib.Check(err)
 			err = db.InsertItem(it)
 			if err != nil {
 				if err, ok := err.(*pq.Error); ok {
@@ -86,7 +80,7 @@ func main() {
 						continue
 					}
 				}
-				check(err)
+				lib.Check(err)
 			}
 		}
 
