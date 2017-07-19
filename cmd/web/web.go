@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"regexp"
+
+	_ "github.com/wader/disable_sendfile_vbox_linux"
 
 	nfdb "github.com/cjauvin/netflix/db"
 )
@@ -23,6 +26,16 @@ func post(db nfdb.NetflixDB) http.Handler {
 			return
 		}
 
+		_, emailOK := r.Form["email"]
+		_, passwordOK := r.Form["password"]
+		_, actionOK := r.Form["action"]
+
+		if !emailOK || !passwordOK || !actionOK {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request!"))
+			return
+		}
+
 		if r.Form["password"][0] != *pw {
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte("Unauthorized!"))
@@ -32,7 +45,12 @@ func post(db nfdb.NetflixDB) http.Handler {
 		email := r.Form["email"][0]
 		isSubscribing := r.Form["action"][0] == "subscribe"
 
-		// TODO: validate email address
+		re := regexp.MustCompile(`^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,4}$`)
+		if !re.MatchString(email) {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte("Bad request!"))
+			return
+		}
 
 		err := db.UpsertUser(email, isSubscribing)
 		if err != nil {

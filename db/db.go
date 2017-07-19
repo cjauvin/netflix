@@ -29,6 +29,13 @@ type Item struct {
 	Image     []byte
 }
 
+type User struct {
+	UserAccountID  int
+	Email          string
+	IsActive       bool
+	LastSentItemID sql.NullInt64
+}
+
 func downloadImage(url string) (img []byte, err error) {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -87,8 +94,18 @@ func (db *NetflixDB) UpsertUser(email string, isActive bool) (err error) {
 	return
 }
 
-func (db *NetflixDB) GetItems() (items []*Item, err error) {
-	rows, err := db.Query("select * from item limit 40")
+func (db *NetflixDB) UpdateUserLastSentItemID(userAccountID int, lastSentItemID int) (err error) {
+	_, err = db.Exec("update user_account set last_sent_item_id = $1 where user_account_id = $2", lastSentItemID, userAccountID)
+	return
+}
+
+func (db *NetflixDB) GetItems(minItemID sql.NullInt64) (items []*Item, err error) {
+	var rows *sql.Rows
+	if minItemID.Valid {
+		rows, err = db.Query("select * from item where item_id > $1 order by item_id", minItemID.Int64)
+	} else {
+		rows, err = db.Query("select * from item order by item_id")
+	}
 	defer rows.Close()
 	if err == nil {
 		for rows.Next() {
@@ -98,6 +115,22 @@ func (db *NetflixDB) GetItems() (items []*Item, err error) {
 				panic(err)
 			}
 			items = append(items, &it)
+		}
+	}
+	return
+}
+
+func (db *NetflixDB) GetUsers() (users []*User, err error) {
+	rows, err := db.Query("select * from user_account where is_active")
+	defer rows.Close()
+	if err == nil {
+		for rows.Next() {
+			u := User{}
+			err := rows.Scan(&u.UserAccountID, &u.Email, &u.IsActive, &u.LastSentItemID)
+			if err != nil {
+				panic(err)
+			}
+			users = append(users, &u)
 		}
 	}
 	return

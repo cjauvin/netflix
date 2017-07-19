@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
-	"html/template"
 	"log"
 	"net/smtp"
+	"text/template"
 
 	nfdb "github.com/cjauvin/netflix/db"
 )
@@ -52,34 +52,45 @@ func main() {
 <table>
   {{range .}}
     <tr>
-      {{range .}}<td><img src={{.ImageUrl}}><img><br>{{.Title}}<hr>{{.Summary}}</td>{{end}}
+      {{range .}}<td><img src={{.ImageUrl}}><img><br><i>{{.Title}}</i><hr>{{.Summary}}<br><a href="http://imdb.com/title/{{.ImdbID}}">IMDb</a><br><a href="https://netflix.com/title/{{.NetflixID}}">Netflix</a></td>{{end}}
     </tr>
   {{end}}
 </table>`))
 
-	g := []row{}
-
-	items, err := db.GetItems()
+	users, err := db.GetUsers()
 	check(err)
 
-	var j int
-	for i, it := range items {
-		if i%nCols == 0 {
-			j = 0
-			g = append(g, row{})
+	for _, u := range users {
+		items, err := db.GetItems(u.LastSentItemID)
+		check(err)
+
+		if len(items) == 0 {
+			log.Printf("No items for %s, skipping", u.Email)
+			continue
 		}
-		g[len(g)-1][j] = *it
-		j++
+
+		g := []row{}
+
+		var j int
+		for i, it := range items {
+			if i%nCols == 0 {
+				j = 0
+				g = append(g, row{})
+			}
+			g[len(g)-1][j] = *it
+			j++
+		}
+
+		var tpl bytes.Buffer
+		err = tmpl.Execute(&tpl, g)
+		check(err)
+
+		err = sendEmail("cjauvin@gmail.com", u.Email, "Netflix Updates", tpl.String(), *pw)
+		check(err)
+
+		lastSentItemID := items[len(items)-1].ItemID
+		db.UpdateUserLastSentItemID(u.UserAccountID, lastSentItemID)
+
+		log.Printf("Sent %d items to %s", len(items), u.Email)
 	}
-
-	// fmt.Println(len(g))
-	// fmt.Println(g[0][0].Title)
-	// fmt.Println(g[21][1].Title)
-
-	var tpl bytes.Buffer
-	err = tmpl.Execute(&tpl, g)
-	check(err)
-
-	err = sendEmail("cjauvin@gmail.com", "cjauvin@gmail.com", "Netflix Fetcher", tpl.String(), *pw)
-	check(err)
 }

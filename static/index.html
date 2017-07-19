@@ -1,22 +1,111 @@
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>Netflix Fetcher</title>
-</head>
-<body>
-  <form action="/do" method="post">
-    <input type="text" name="email" placeholder="email" size="50">
-    <br><br>
-    <input type="text" name="password" placeholder="password" size="50">
-    <br><br>
-    <select name="action">
-      <option value="subscribe">subscribe</option>
-      <option value="unsubscribe">unsubscribe</option>
-    </select>
-    <br><br>
-    <input type="submit" value="Submit">
-  </form>
 
-</body>
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <!-- <link rel="icon" href="../../favicon.ico"> -->
+
+    <title>Netflix Updates</title>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+
+    <!-- Custom styles for this template -->
+    <link href="jumbotron-narrow.css" rel="stylesheet">
+
+    <style>
+
+.form-signin {
+  max-width: 330px;
+  padding: 15px;
+  margin: 0 auto;
+}
+
+.form-signin .form-control:focus {
+  z-index: 2;
+}
+
+.form-signin * {
+  margin-bottom: 10px;
+}
+
+    </style>
+
+    <script>
+
+$(document).ready(function() {
+    $("#submit_btn").click(function() {
+        $.post('/do', $("#my_form").serialize(), function(resp) {
+            $('#error_div').hide();
+            $('#success_div').show();
+            $('#success_div').text(resp);
+        }).fail(function(resp) {
+            $('#success_div').hide();
+            $('#error_div').show();
+            $('#error_div').text("Something's wrong..");
+        });
+    });
+});
+
+    </script>
+
+  </head>
+
+  <body>
+
+    <div class="container">
+
+      <!-- <div class="header clearfix"> -->
+      <!--   <nav> -->
+      <!--     <ul class="nav nav-pills pull-right"> -->
+      <!--       <li role="presentation" class="active"><a href="#">Home</a></li> -->
+      <!--       <li role="presentation"><a href="#">About</a></li> -->
+      <!--       <li role="presentation"><a href="#">Contact</a></li> -->
+      <!--     </ul> -->
+      <!--   </nav> -->
+      <!--   <h3 class="text-muted">Netflix Updates</h3> -->
+      <!-- </div> -->
+
+      <div class="jumbotron">
+        <h2>Netflix Updates</h2>
+        <p class="lead">Register to receive weekly emails about new releases (🇨🇦 only).</p>
+
+        <div class="alert alert-success fade in" id="success_div" style="display:none;">
+          <a href="#" class="close" data-dismiss="alert">&times;</a>
+          <strong>Success!</strong> Bla bla.
+        </div>
+
+        <div class="alert alert-danger fade in" id="error_div" style="display:none;">
+          <a href="#" class="close" data-dismiss="alert">&times;</a>
+          <strong>Error!</strong> There was a problem, please try again.
+        </div>
+
+        <div class="form-signin">
+          <form action="/do" method="post" id="my_form">
+            <input type="text" name="email" placeholder="email" class="form-control">
+            <input type="text" name="password" placeholder="password" class="form-control">
+            <select name="action" class="form-control">
+              <option value="subscribe">subscribe</option>
+              <option value="unsubscribe">unsubscribe</option>
+            </select>
+            <input type="button" id="submit_btn" value="Submit" class="btn btn-primary btn-block">
+          </form>
+        </div>
+
+      </div>
+
+      <footer class="footer">
+        <p>&copy; 2017 Christian Jauvin</p>
+      </footer>
+
+    </div> <!-- /container -->
+
+  </body>
 </html>

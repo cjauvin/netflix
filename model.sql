@@ -17,5 +17,6 @@ drop table if exists user_account;
 create table user_account (
   user_account_id serial primary key,
   email text unique,
-  is_active bool default true
+  is_active bool default true,
+  last_sent_item_id int references item
 );
