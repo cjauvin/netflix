@@ -27,7 +27,7 @@ func post(db *sql.DB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 		if *dumpRequests {
-			rd, err := httputil.DumpRequest(r, false)
+			rd, err := httputil.DumpRequest(r, true)
 			lib.Check(err)
 			log.Println(string(rd))
 		}
