@@ -1,13 +1,17 @@
 package main
 
 import (
+	"database/sql"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/http/httputil"
+	"os"
 	"regexp"
 
-	_ "github.com/wader/disable_sendfile_vbox_linux"
+	// _ "github.com/wader/disable_sendfile_vbox_linux"
 
 	lib "github.com/cjauvin/netflix/pkg"
 )
@@ -16,14 +20,23 @@ var (
 	webPassword  = flag.String("web-pw", "", "POST password")
 	SMTPPassword = flag.String("smtp-pw", "", "SMTP password")
 	port         = flag.Int("port", 80, "port")
+	dumpRequests = flag.Bool("dump", false, "dump requests")
 )
 
-func post(db lib.NetflixDB) http.Handler {
+func post(db *sql.DB) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		if *dumpRequests {
+			rd, err := httputil.DumpRequest(r, false)
+			lib.Check(err)
+			log.Println(string(rd))
+		}
+
 		r.ParseForm()
 		if r.Method != "POST" {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			w.Write([]byte("Not allowed!"))
+			log.Println(http.StatusMethodNotAllowed)
 			return
 		}
 
@@ -34,12 +47,14 @@ func post(db lib.NetflixDB) http.Handler {
 		if !emailOK || !passwordOK || !actionOK {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request!"))
+			log.Println(http.StatusBadRequest)
 			return
 		}
 
 		if r.Form["password"][0] != *webPassword {
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte("Unauthorized!"))
+			log.Println(http.StatusUnauthorized)
 			return
 		}
 
@@ -50,37 +65,55 @@ func post(db lib.NetflixDB) http.Handler {
 		if !re.MatchString(email) {
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte("Bad request!"))
+			log.Println(http.StatusBadRequest)
 			return
 		}
 
-		u, err := db.UpsertUser(email, isSubscribing)
+		tx, err := lib.GetNetflixTx(db)
 		lib.Check(err)
 
+		u, err := tx.UpsertUser(email, isSubscribing)
+		lib.Check(err)
+
+		tx.Commit()
+
 		if isSubscribing {
-			items, err := db.GetItems(u.LastSentItemID)
-			lib.Check(err)
-			if len(items) > 0 {
+			msg := fmt.Sprintf("%s has been subscribed", email)
+			fmt.Fprint(w, msg)
+			log.Println(msg)
+			// Send first email if there are items to send
+			go func() {
+				tx, err := lib.GetNetflixTx(db)
+				lib.Check(err)
+				items, err := tx.GetItems(u.LastSentItemID)
+				lib.Check(err)
+				if len(items) == 0 {
+					return
+				}
 				body := lib.BuildEmailBody(items)
 				err = lib.SendEmail("cjauvin@gmail.com", u.Email, "Netflix Updates", body, *SMTPPassword)
 				lib.Check(err)
 				lastSentItemID := items[len(items)-1].ItemID
-				db.UpdateUserLastSentItemID(u.UserAccountID, lastSentItemID)
+				tx.UpdateUserLastSentItemID(u.UserAccountID, lastSentItemID)
 				log.Printf("Sent %d items to %s", len(items), u.Email)
-				fmt.Fprintf(w, "%s has been subscribed (a first email has been sent)", email)
-			} else {
-				fmt.Fprintf(w, "%s has been subscribed", email)
-			}
+				//fmt.Fprintf(w, "%s has been subscribed (a first email has been sent)", email)
+				tx.Commit()
+			}()
 		} else {
-			fmt.Fprintf(w, "%s has been unsubscribed", email)
+			msg := fmt.Sprintf("%s has been unsubscribed", email)
+			fmt.Fprint(w, msg)
+			log.Println(msg)
 		}
 	})
 }
 
 func main() {
 
-	db, err := lib.GetNetflixDB()
-	lib.Check(err)
-	defer db.Close()
+	f := lib.LogFile("web")
+	defer f.Close()
+
+	mw := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(mw)
 
 	flag.Parse()
 	if *webPassword == "" {
@@ -89,6 +122,11 @@ func main() {
 	if *SMTPPassword == "" {
 		log.Fatalf("SMTP password must be provided")
 	}
+
+	db, err := sql.Open("postgres", "host=/var/run/postgresql dbname=netflix sslmode=disable")
+	lib.Check(err)
+
+	defer db.Close()
 
 	http.Handle("/", http.FileServer(http.Dir("static")))
 	http.Handle("/do", post(db))

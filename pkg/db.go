@@ -2,7 +2,6 @@ package lib
 
 import (
 	"database/sql"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -13,8 +12,9 @@ const (
 	limitForFullQuery = 50
 )
 
-type NetflixDB struct {
-	*sql.DB
+type NetflixTx struct {
+	*sql.Tx
+	DB *sql.DB
 }
 
 type Item struct {
@@ -70,35 +70,47 @@ func BuildItem(values []string) (it *Item, err error) {
 	return
 }
 
-func GetNetflixDB() (NetflixDB, error) {
-	db, err := sql.Open("postgres", "host=/var/run/postgresql dbname=netflix sslmode=disable")
-	return NetflixDB{db}, err
+func GetNetflixTx(db *sql.DB) (NetflixTx, error) {
+	var err error
+	if db == nil {
+		db, err = sql.Open("postgres", "host=/var/run/postgresql dbname=netflix sslmode=disable")
+		if err != nil {
+			return NetflixTx{}, err
+		}
+	}
+	tx, err := db.Begin()
+	return NetflixTx{tx, db}, err
 }
 
-func (db *NetflixDB) InsertItem(it *Item) (err error) {
-	fmt.Println(it.Title)
-	_, err = db.Exec("insert into item (netflix_id, imdb_id, Title, Summary, item_type, Year, api_date, Duration, image_url, Image) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", it.NetflixID, it.ImdbID, it.Title, it.Summary, it.ItemType, it.Year, it.ApiDate, it.Duration, it.ImageUrl, it.Image)
+func (tx NetflixTx) InsertItem(it *Item) (err error) {
+	_, err = tx.Exec("insert into item (netflix_id, imdb_id, Title, Summary, item_type, Year, api_date, Duration, image_url, Image) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", it.NetflixID, it.ImdbID, it.Title, it.Summary, it.ItemType, it.Year, it.ApiDate, it.Duration, it.ImageUrl, it.Image)
 	return
 }
 
-func (db *NetflixDB) UpsertUser(email string, isActive bool) (*User, error) {
-	row := db.QueryRow("insert into user_account (email, is_active) values ($1, $2) on conflict (email) do update set is_active = $2 returning *", email, isActive)
+func (tx NetflixTx) HasItem(netflixID int) (bool, error) {
+	var exists bool
+	err := tx.QueryRow("select exists (select 1 from item where netflix_id = $1)", netflixID).Scan(&exists)
+	return exists, err
+}
+
+func (tx NetflixTx) UpsertUser(email string, isActive bool) (*User, error) {
+	row := tx.QueryRow("insert into user_account (email, is_active) values ($1, $2) on conflict (email) do update set is_active = $2 returning *", email, isActive)
 	u := User{}
 	err := row.Scan(&u.UserAccountID, &u.Email, &u.IsActive, &u.LastSentItemID)
 	return &u, err
 }
 
-func (db *NetflixDB) UpdateUserLastSentItemID(userAccountID int, lastSentItemID int) (err error) {
-	_, err = db.Exec("update user_account set last_sent_item_id = $1 where user_account_id = $2", lastSentItemID, userAccountID)
+func (tx NetflixTx) UpdateUserLastSentItemID(userAccountID int, lastSentItemID int) (err error) {
+	_, err = tx.Exec("update user_account set last_sent_item_id = $1 where user_account_id = $2", lastSentItemID, userAccountID)
 	return
 }
 
-func (db *NetflixDB) GetItems(minItemID sql.NullInt64) (items []*Item, err error) {
+func (tx NetflixTx) GetItems(minItemID sql.NullInt64) (items []*Item, err error) {
 	var rows *sql.Rows
 	if minItemID.Valid {
-		rows, err = db.Query("select * from item where item_id > $1 order by item_id", minItemID.Int64)
+		rows, err = tx.Query("select * from item where item_id > $1 order by item_id", minItemID.Int64)
 	} else {
-		rows, err = db.Query(`
+		rows, err = tx.Query(`
 		    with t as (
 			select * from item order by item_id desc limit $1
 		    )
@@ -118,8 +130,8 @@ func (db *NetflixDB) GetItems(minItemID sql.NullInt64) (items []*Item, err error
 	return
 }
 
-func (db *NetflixDB) GetUsers() (users []*User, err error) {
-	rows, err := db.Query("select * from user_account where is_active")
+func (tx NetflixTx) GetUsers() (users []*User, err error) {
+	rows, err := tx.Query("select * from user_account where is_active")
 	defer rows.Close()
 	if err == nil {
 		for rows.Next() {

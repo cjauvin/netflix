@@ -5,20 +5,19 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	lib "github.com/cjauvin/netflix/pkg"
-
-	"github.com/lib/pq"
 )
 
 const (
-	daysBack                 = 7
-	country                  = "CA"
-	uniqueViolationErrorCode = "23505" // https://www.postgresql.org/docs/current/static/errcodes-appendix.html
+	daysBack = 7
+	country  = "CA"
 )
 
 type apiResponse struct {
@@ -28,20 +27,27 @@ type apiResponse struct {
 
 func main() {
 
+	f := lib.LogFile("fetch")
+	defer f.Close()
+
+	mw := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(mw)
+
 	key := flag.String("key", "", "Mashape API key")
 	flag.Parse()
 	if *key == "" {
-		log.Fatalf("key must be provided")
+		log.Fatalln("key must be provided")
 	}
 
-	db, err := lib.GetNetflixDB()
+	tx, err := lib.GetNetflixTx(nil)
 	lib.Check(err)
-	defer db.Close()
+
+	defer tx.DB.Close()
 
 	done := false
 	for page := 1; !done; page++ {
 		u := fmt.Sprintf("https://unogs-unogs-v1.p.mashape.com/api.cgi?q=get:new%d:%s&p=%d&t=ns&st=adv", daysBack, country, page)
-		//u := "http://localhost:8001/sample.json"
+		// u := "http://localhost:8001/sample.json"
 		req, err := http.NewRequest("GET", u, nil)
 		lib.Check(err)
 		req.Header.Set("X-Mashape-Key", *key)
@@ -72,19 +78,19 @@ func main() {
 		for _, values := range apiResp.Items {
 			it, err := lib.BuildItem(values)
 			lib.Check(err)
-			err = db.InsertItem(it)
-			if err != nil {
-				if err, ok := err.(*pq.Error); ok {
-					if err.Code == uniqueViolationErrorCode {
-						fmt.Println("already there")
-						continue
-					}
-				}
+			present, err := tx.HasItem(it.NetflixID)
+			lib.Check(err)
+			if !present {
+				log.Println(it.Title)
+				err = tx.InsertItem(it)
 				lib.Check(err)
+			} else {
+				log.Printf("%s: <SKIPPING>\n", it.Title)
 			}
 		}
 
 		done = len(apiResp.Items) == 0
+		// done = true
 	}
-
+	tx.Commit()
 }
