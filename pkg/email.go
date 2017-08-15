@@ -41,7 +41,7 @@ func BuildEmailBody(items []*Item) string {
 	  <hr />
 	  {{.Summary}}
           <br />
-	  <a href="http://imdb.com/title/{{.ImdbID}}">IMDb</a>
+	  <a href="http://www.imdb.com/title/{{.ImdbID}}">IMDb</a>
 	  <br />
 	  <a href="https://netflix.com/title/{{.NetflixID}}">Netflix</a>
         {{end}}

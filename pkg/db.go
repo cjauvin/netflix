@@ -25,9 +25,9 @@ type Item struct {
 	Summary   string
 	ItemType  string
 	Year      int
-	ApiDate   time.Time
+	APIDate   time.Time
 	Duration  string
-	ImageUrl  string
+	ImageURL  string
 	Image     []byte
 }
 
@@ -39,6 +39,7 @@ type User struct {
 }
 
 func BuildItem(values []string) (it *Item, err error) {
+
 	netflixID, err := strconv.Atoi(values[0])
 	if err != nil {
 		return
@@ -62,9 +63,9 @@ func BuildItem(values []string) (it *Item, err error) {
 		Summary:   values[3],
 		ItemType:  values[6],
 		Year:      year,
-		ApiDate:   apiDate,
+		APIDate:   apiDate,
 		Duration:  values[8],
-		ImageUrl:  values[2],
+		ImageURL:  values[2],
 		Image:     img,
 	}
 	return
@@ -83,7 +84,7 @@ func GetNetflixTx(db *sql.DB) (NetflixTx, error) {
 }
 
 func (tx NetflixTx) InsertItem(it *Item) (err error) {
-	_, err = tx.Exec("insert into item (netflix_id, imdb_id, Title, Summary, item_type, Year, api_date, Duration, image_url, Image) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", it.NetflixID, it.ImdbID, it.Title, it.Summary, it.ItemType, it.Year, it.ApiDate, it.Duration, it.ImageUrl, it.Image)
+	_, err = tx.Exec("insert into item (netflix_id, imdb_id, Title, Summary, item_type, Year, api_date, Duration, image_url, Image) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)", it.NetflixID, it.ImdbID, it.Title, it.Summary, it.ItemType, it.Year, it.APIDate, it.Duration, it.ImageURL, it.Image)
 	return
 }
 
@@ -120,7 +121,7 @@ func (tx NetflixTx) GetItems(minItemID sql.NullInt64) (items []*Item, err error)
 	if err == nil {
 		for rows.Next() {
 			it := Item{}
-			err := rows.Scan(&it.ItemID, &it.NetflixID, &it.ImdbID, &it.Title, &it.Summary, &it.ItemType, &it.Year, &it.ApiDate, &it.Duration, &it.ImageUrl, &it.Image)
+			err := rows.Scan(&it.ItemID, &it.NetflixID, &it.ImdbID, &it.Title, &it.Summary, &it.ItemType, &it.Year, &it.APIDate, &it.Duration, &it.ImageURL, &it.Image)
 			if err != nil {
 				panic(err)
 			}

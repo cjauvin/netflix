@@ -17,6 +17,7 @@ func main() {
 	mw := io.MultiWriter(os.Stdout, f)
 	log.SetOutput(mw)
 
+	minToSend := flag.Int("min", 10, "minimum new items to send email")
 	pw := flag.String("pw", "", "STMP password")
 	flag.Parse()
 	if *pw == "" {
@@ -36,8 +37,8 @@ func main() {
 		items, err := tx.GetItems(u.LastSentItemID)
 		lib.Check(err)
 
-		if len(items) == 0 {
-			log.Printf("No items for %s, skipping", u.Email)
+		if len(items) < *minToSend {
+			log.Printf("Not enough items (%d) for %s, skipping", len(items), u.Email)
 			continue
 		}
 
