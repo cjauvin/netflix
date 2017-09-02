@@ -33,7 +33,7 @@ func BuildEmailBody(items []*Item) string {
   {{range .}}
     <tr>
       {{range .}}
-      <td>
+      <td valign="top">
         {{if .ItemID }}
 	  <img src={{.ImageURL}}><img>
 	  <br />
