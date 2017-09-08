@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -37,20 +38,22 @@ func main() {
 		items, err := tx.GetItems(u.LastSentItemID)
 		lib.Check(err)
 
-		if len(items) < *minToSend {
-			log.Printf("Not enough items (%d) for %s, skipping", len(items), u.Email)
+		nItems := len(items)
+
+		if nItems < *minToSend {
+			log.Printf("Not enough items (%d) for %s, skipping", nItems, u.Email)
 			continue
 		}
 
 		body := lib.BuildEmailBody(items)
 
-		err = lib.SendEmail("cjauvin@gmail.com", u.Email, "Netflix Updates", body, *pw)
+		err = lib.SendEmail("cjauvin@gmail.com", u.Email, fmt.Sprintf("Netflix Updates (%d)", nItems), body, *pw)
 		lib.Check(err)
 
-		lastSentItemID := items[len(items)-1].ItemID
+		lastSentItemID := items[nItems-1].ItemID
 		tx.UpdateUserLastSentItemID(u.UserAccountID, lastSentItemID)
 
-		log.Printf("Sent %d items to %s", len(items), u.Email)
+		log.Printf("Sent %d items to %s", nItems, u.Email)
 	}
 	tx.Commit()
 }
